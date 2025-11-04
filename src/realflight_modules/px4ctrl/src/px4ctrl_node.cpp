@@ -1,7 +1,8 @@
 #include <ros/ros.h>
 #include "PX4CtrlFSM.h"
-#include <signal.h>
+#include <signal.h>  //系统自带的头文件，属于C标准库
 
+// 中断处理
 void mySigintHandler(int sig)
 {
     ROS_INFO("[PX4Ctrl] exit...");
@@ -13,7 +14,7 @@ int main(int argc, char *argv[])
     ros::init(argc, argv, "px4ctrl");
     ros::NodeHandle nh("~");
 
-    signal(SIGINT, mySigintHandler);
+    signal(SIGINT, mySigintHandler);  // SIGINT：中断信号(Ctrl+C)，执行mySigintHandler
     ros::Duration(1.0).sleep();
 
     Parameter_t param;
