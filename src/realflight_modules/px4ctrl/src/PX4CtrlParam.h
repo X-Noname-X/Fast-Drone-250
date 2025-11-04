@@ -66,33 +66,34 @@ public:
 	ThrustMapping thr_map;
 	AutoTakeoffLand takeoff_land;
 
-	int pose_solver;
-	double mass;
-	double gra;
-	double max_angle;
-	double ctrl_freq_max;
-	double max_manual_vel;
-	double low_voltage;
+	int pose_solver;  // 姿态解算器选择
+	double mass;      //无人机质量
+	double gra;   // 重力加速度
+	double max_angle;  //最大倾斜角（弧度）
+	double ctrl_freq_max;  // 最大控制频率
+	double max_manual_vel;  // 最大手动控制速度
+	double low_voltage;  // 低电压阈值(V)
 
-	bool use_bodyrate_ctrl;
+	bool use_bodyrate_ctrl;  // 是否使用角速度控制模式
 	// bool print_dbg;
 
-	Parameter_t();
-	void config_from_ros_handle(const ros::NodeHandle &nh);
-	void config_full_thrust(double hov);
+	Parameter_t();  //构造函数，初始化所有参数的默认值
+	void config_from_ros_handle(const ros::NodeHandle &nh); //从ROS参数服务器加载所有参数
+	void config_full_thrust(double hov);  //全推力配置：根据悬停推力配置完整的推力模型参数
 
 private:
+//参数读取模板函数
 	template <typename TName, typename TVal>
 	void read_essential_param(const ros::NodeHandle &nh, const TName &name, TVal &val)
 	{
 		if (nh.getParam(name, val))
 		{
-			// pass
+			// pass // 读取成功，继续执行
 		}
 		else
 		{
-			ROS_ERROR_STREAM("Read param: " << name << " failed.");
-			ROS_BREAK();
+			ROS_ERROR_STREAM("Read param: " << name << " failed."); //明确显示哪个参数读取失败
+			ROS_BREAK();  //参数读取失败，中断程序
 		}
 	};
 };
