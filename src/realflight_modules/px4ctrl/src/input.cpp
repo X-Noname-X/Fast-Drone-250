@@ -2,8 +2,9 @@
 
 RC_Data_t::RC_Data_t()
 {
-    rcv_stamp = ros::Time(0);
+    rcv_stamp = ros::Time(0);  // 设置为0时间，表示尚未收到数据
 
+    // 负值为无效值，表示未初始化
     last_mode = -1.0;
     last_gear = -1.0;
 
@@ -15,18 +16,19 @@ RC_Data_t::RC_Data_t()
     toggle_reboot = false;
     for (int i = 0; i < 4; ++i)
     {
-        ch[i] = 0.0;
+        ch[i] = 0.0;  // 所有通道初始化为0（中立位置）  ch[2]: 油门(throttle)
     }
 }
 
 void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
 {
     msg = *pMsg;
-    rcv_stamp = ros::Time::now();
+    rcv_stamp = ros::Time::now(); //更新接收时间戳
 
     for (int i = 0; i < 4; i++)
     {
-        ch[i] = ((double)msg.channels[i] - 1500.0) / 500.0;
+        ch[i] = ((double)msg.channels[i] - 1500.0) / 500.0;  // 原始PWM值(1000-2000) -> 标准化到[-1,1]
+        //死区处理
         if (ch[i] > DEAD_ZONE)
             ch[i] = (ch[i] - DEAD_ZONE) / (1 - DEAD_ZONE);
         else if (ch[i] < -DEAD_ZONE)
@@ -39,8 +41,10 @@ void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
     gear = ((double)msg.channels[5] - 1000.0) / 1000.0;
     reboot_cmd = ((double)msg.channels[7] - 1000.0) / 1000.0;
 
+    // 有效性检查
     check_validity();
 
+    //首次数据初始化
     if (!have_init_last_mode)
     {
         have_init_last_mode = true;
@@ -57,7 +61,7 @@ void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
         last_reboot_cmd = reboot_cmd;
     }
 
-    // 1
+    // 1：悬停模式检测
     if (last_mode < API_MODE_THRESHOLD_VALUE && mode > API_MODE_THRESHOLD_VALUE)
         enter_hover_mode = true;
     else
@@ -68,7 +72,7 @@ void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
     else
         is_hover_mode = false;
 
-    // 2
+    // 2：命令模式检测（仅在悬停模式下有效）
     if (is_hover_mode)
     {
         if (last_gear < GEAR_SHIFT_VALUE && gear > GEAR_SHIFT_VALUE)
@@ -82,7 +86,7 @@ void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
             is_command_mode = false;
     }
 
-    // 3
+    // 3：重启检测（仅在非自主模式下有效）
     if (!is_hover_mode && !is_command_mode)
     {
         if (last_reboot_cmd < REBOOT_THRESHOLD_VALUE && reboot_cmd > REBOOT_THRESHOLD_VALUE)
@@ -93,6 +97,7 @@ void RC_Data_t::feed(mavros_msgs::RCInConstPtr pMsg)
     else
         toggle_reboot = false;
 
+    //状态保存
     last_mode = mode;
     last_gear = gear;
     last_reboot_cmd = reboot_cmd;
@@ -131,9 +136,9 @@ void Odom_Data_t::feed(nav_msgs::OdometryConstPtr pMsg)
     rcv_stamp = now;
     recv_new_msg = true;
 
-    uav_utils::extract_odometry(pMsg, p, v, q, w);
+    uav_utils::extract_odometry(pMsg, p, v, q, w);  //从原始数据获取p,v,q,w
 
-// #define VEL_IN_BODY
+// #define VEL_IN_BODY  速度坐标系转换（条件编译）
 #ifdef VEL_IN_BODY /* Set to 1 if the velocity in odom topic is relative to current body frame, not to world frame.*/
     Eigen::Quaternion<double> wRb_q(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z);
     Eigen::Matrix3d wRb = wRb_q.matrix();
@@ -144,7 +149,7 @@ void Odom_Data_t::feed(nav_msgs::OdometryConstPtr pMsg)
         ROS_WARN("VEL_IN_BODY!!!");
 #endif
 
-    // check the frequency
+    // check the frequency 每秒统计一次接收的消息数量
     static int one_min_count = 9999;
     static ros::Time last_clear_count_time = ros::Time(0.0);
     if ( (now - last_clear_count_time).toSec() > 1.0 )
@@ -241,14 +246,15 @@ void Command_Data_t::feed(quadrotor_msgs::PositionCommandConstPtr pMsg)
     a(1) = msg.acceleration.y;
     a(2) = msg.acceleration.z;
 
+    // 加加速度
     j(0) = msg.jerk.x;
     j(1) = msg.jerk.y;
     j(2) = msg.jerk.z;
 
     // std::cout << "j1=" << j.transpose() << std::endl;
 
-    yaw = uav_utils::normalize_angle(msg.yaw);
-    yaw_rate = msg.yaw_dot;
+    yaw = uav_utils::normalize_angle(msg.yaw); // 归一化偏航角，偏航角归一化到 [-π, π] 或 [0, 2π] 范围内
+    yaw_rate = msg.yaw_dot;   // 偏航角速度
 }
 
 Battery_Data_t::Battery_Data_t()
