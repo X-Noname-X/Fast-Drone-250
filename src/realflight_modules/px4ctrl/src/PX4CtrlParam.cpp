@@ -1,11 +1,15 @@
 #include "PX4CtrlParam.h"
 
+//显示构造函数，类内只是声明
 Parameter_t::Parameter_t()
 {
 }
 
 void Parameter_t::config_from_ros_handle(const ros::NodeHandle &nh)
 {
+	//读取参数  ROS将 "gain/Kp0" 解析为在 gain 命名空间下的 Kp0 参数
+	//nh.getParam("gain/Kp0", gain.Kp0)的机制：在参数服务器中查找完整路径（如/px4ctrl/gain/Kp0）->将找到的参数值赋给 gain.Kp0 成员变量
+	//方便从yaml文件中加载
 	read_essential_param(nh, "gain/Kp0", gain.Kp0);
 	read_essential_param(nh, "gain/Kp1", gain.Kp1);
 	read_essential_param(nh, "gain/Kp2", gain.Kp2);
@@ -57,20 +61,21 @@ void Parameter_t::config_from_ros_handle(const ros::NodeHandle &nh)
 	read_essential_param(nh, "thrust_model/accurate_thrust_model", thr_map.accurate_thrust_model);
 	read_essential_param(nh, "thrust_model/hover_percentage", thr_map.hover_percentage);
 	
-
+	// 将角度从度转为弧度
 	max_angle /= (180.0 / M_PI);
-
+	//自动解锁必须与自动起降同时启用
 	if ( takeoff_land.enable_auto_arm && !takeoff_land.enable )
 	{
 		takeoff_land.enable_auto_arm = false;
 		ROS_ERROR("\"enable_auto_arm\" is only allowd with \"auto_takeoff_land\" enabled.");
 	}
+	//无遥控器模式必须同时启用自动起降和自动解锁
 	if ( takeoff_land.no_RC && (!takeoff_land.enable_auto_arm || !takeoff_land.enable) )
 	{
 		takeoff_land.no_RC = false;
 		ROS_ERROR("\"no_RC\" is only allowd with both \"auto_takeoff_land\" and \"enable_auto_arm\" enabled.");
 	}
-
+	//提醒用户在常规使用时关闭调试输出以避免性能影响
 	if ( thr_map.print_val )
 	{
 		ROS_WARN("You should disable \"print_value\" if you are in regular usage.");
