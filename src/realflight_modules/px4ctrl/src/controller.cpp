@@ -25,15 +25,19 @@ LinearControl::calculateControl(const Desired_State_t &des,
     Controller_Output_t &u)
 {
   /* WRITE YOUR CODE HERE */
-      //compute disired acceleration
+      //compute desired acceleration
       Eigen::Vector3d des_acc(0.0, 0.0, 0.0);
       Eigen::Vector3d Kp,Kv;
       Kp << param_.gain.Kp0, param_.gain.Kp1, param_.gain.Kp2;
       Kv << param_.gain.Kv0, param_.gain.Kv1, param_.gain.Kv2;
+      //控制律：des_acc = 期望加速度 + Kv×(速度误差) + Kp×(位置误差) + 重力补偿
+      //这是一个典型的PD控制器，通过加速度前馈加上位置和速度反馈来生成控制指令。
       des_acc = des.a + Kv.asDiagonal() * (des.v - odom.v) + Kp.asDiagonal() * (des.p - odom.p);
       des_acc += Eigen::Vector3d(0,0,param_.gra);
-
+      
+      //将期望加速度转换为推力指令
       u.thrust = computeDesiredCollectiveThrustSignal(des_acc);
+      //姿态计算
       double roll,pitch,yaw,yaw_imu;
       double yaw_odom = fromQuaternion2yaw(odom.q);
       double sin = std::sin(yaw_odom);
@@ -45,10 +49,11 @@ LinearControl::calculateControl(const Desired_State_t &des,
       // Eigen::Quaterniond q = Eigen::AngleAxisd(yaw,Eigen::Vector3d::UnitZ())
       //   * Eigen::AngleAxisd(roll,Eigen::Vector3d::UnitX())
       //   * Eigen::AngleAxisd(pitch,Eigen::Vector3d::UnitY());
+      //姿态四元数构造
       Eigen::Quaterniond q = Eigen::AngleAxisd(des.yaw,Eigen::Vector3d::UnitZ())
         * Eigen::AngleAxisd(pitch,Eigen::Vector3d::UnitY())
         * Eigen::AngleAxisd(roll,Eigen::Vector3d::UnitX());
-      u.q = imu.q * odom.q.inverse() * q;
+      u.q = imu.q * odom.q.inverse() * q;//姿态融合
 
 
   /* WRITE YOUR CODE HERE */
@@ -73,7 +78,7 @@ LinearControl::calculateControl(const Desired_State_t &des,
   
   debug_msg_.des_thr = u.thrust;
   
-  // Used for thrust-accel mapping estimation
+  // Used for thrust-accel mapping estimation 推力历史记录
   timed_thrust_.push(std::pair<ros::Time, double>(ros::Time::now(), u.thrust));
   while (timed_thrust_.size() > 100)
   {
@@ -131,6 +136,7 @@ LinearControl::estimateThrustModel(
     /***********************************/
     double gamma = 1 / (rho2_ + thr * P_ * thr);
     double K = gamma * P_ * thr;
+    //就是为了计算thr2acc_(推力到加速度的转换系数)和P_(估计误差协方差)两个参数
     thr2acc_ = thr2acc_ + K * (est_a(2) - thr * thr2acc_);
     P_ = (1 - K * thr) * P_ / rho2_;
     //printf("%6.3f,%6.3f,%6.3f,%6.3f\n", thr2acc_, gamma, K, P_);
