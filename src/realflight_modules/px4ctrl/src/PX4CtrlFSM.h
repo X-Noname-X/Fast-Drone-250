@@ -16,15 +16,16 @@
 
 struct AutoTakeoffLand_t
 {
-	bool landed{true};
-	ros::Time toggle_takeoff_land_time;
-	std::pair<bool, ros::Time> delay_trigger{std::pair<bool, ros::Time>(false, ros::Time(0))};
-	Eigen::Vector4d start_pose;
+	bool landed{true};  //是否处于着陆状态
+	ros::Time toggle_takeoff_land_time; // 记录起飞着陆切换时间点
+	std::pair<bool, ros::Time> delay_trigger{std::pair<bool, ros::Time>(false, ros::Time(0))}; //延时触发机制
+	Eigen::Vector4d start_pose;  // 使用Eigen库的4维向量，存储起始位姿
 	
-	static constexpr double MOTORS_SPEEDUP_TIME = 3.0; // motors idle running for 3 seconds before takeoff
-	static constexpr double DELAY_TRIGGER_TIME = 2.0;  // Time to be delayed when reach at target height
+	static constexpr double MOTORS_SPEEDUP_TIME = 3.0; // motors idle running for 3 seconds before takeoff 电机加速时间常量，起飞前电机空转3秒预热
+	static constexpr double DELAY_TRIGGER_TIME = 2.0;  // Time to be delayed when reach at target height 延迟触发时间常量，到达目标高度后延迟2秒执行后续动作
 };
 
+//高层飞行控制状态机，负责协调各种传感器输入、控制算法输出和飞控系统交互
 class PX4CtrlFSM
 {
 public:
@@ -41,8 +42,9 @@ public:
 
 	LinearControl &controller;
 
-	ros::Publisher traj_start_trigger_pub;
-	ros::Publisher ctrl_FCU_pub;
+	//ROS通信相关
+	ros::Publisher traj_start_trigger_pub; // 轨迹开始触发器
+	ros::Publisher ctrl_FCU_pub;  // 飞控单元控制发布器
 	ros::Publisher debug_pub; //debug
 	ros::ServiceClient set_FCU_mode_srv;
 	ros::ServiceClient arming_client_srv;
@@ -50,8 +52,8 @@ public:
 
 	quadrotor_msgs::Px4ctrlDebug debug_msg; //debug
 
-	Eigen::Vector4d hover_pose;
-	ros::Time last_set_hover_pose_time;
+	Eigen::Vector4d hover_pose;  //悬停位姿
+	ros::Time last_set_hover_pose_time;  //最后设置悬停位姿时间
 
 	enum State_t
 	{
@@ -62,8 +64,8 @@ public:
 		AUTO_LAND
 	};
 
-	PX4CtrlFSM(Parameter_t &, LinearControl &);
-	void process();
+	PX4CtrlFSM(Parameter_t &, LinearControl &); //构造函数
+	void process(); //主处理函数
 	bool rc_is_received(const ros::Time &now_time);
 	bool cmd_is_received(const ros::Time &now_time);
 	bool odom_is_received(const ros::Time &now_time);
