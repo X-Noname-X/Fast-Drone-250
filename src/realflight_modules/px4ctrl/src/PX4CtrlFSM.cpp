@@ -10,7 +10,7 @@ PX4CtrlFSM::PX4CtrlFSM(Parameter_t &param_, LinearControl &controller_) : param(
 	hover_pose.setZero();
 }
 
-/* 
+/* PX4飞行控制器的有限状态机（FSM）实现，用于管理飞行模式之间的转换
         Finite State Machine
 
 	      system start
@@ -48,7 +48,8 @@ void PX4CtrlFSM::process()
 	{
 	case MANUAL_CTRL:
 	{
-		if (rc_data.enter_hover_mode) // Try to jump to AUTO_HOVER
+		// Try to jump to AUTO_HOVER 尝试进入自动悬停模式
+		if (rc_data.enter_hover_mode) 
 		{
 			if (!odom_is_received(now_time))
 			{
@@ -60,6 +61,7 @@ void PX4CtrlFSM::process()
 				ROS_ERROR("[px4ctrl] Reject AUTO_HOVER(L2). You are sending commands before toggling into AUTO_HOVER, which is not allowed. Stop sending commands now!");
 				break;
 			}
+			//计算里程计速度的欧几里得范数（总速度大小）大于3m/s，拒绝切换到自动悬停状态
 			if (odom_data.v.norm() > 3.0)
 			{
 				ROS_ERROR("[px4ctrl] Reject AUTO_HOVER(L2). Odom_Vel=%fm/s, which seems that the locolization module goes wrong!", odom_data.v.norm());
@@ -73,7 +75,8 @@ void PX4CtrlFSM::process()
 
 			ROS_INFO("\033[32m[px4ctrl] MANUAL_CTRL(L1) --> AUTO_HOVER(L2)\033[32m");
 		}
-		else if (param.takeoff_land.enable && takeoff_land_data.triggered && takeoff_land_data.takeoff_land_cmd == quadrotor_msgs::TakeoffLand::TAKEOFF) // Try to jump to AUTO_TAKEOFF
+		// Try to jump to AUTO_TAKE_OFF 
+		else if (param.takeoff_land.enable && takeoff_land_data.triggered && takeoff_land_data.takeoff_land_cmd == quadrotor_msgs::TakeoffLand::TAKEOFF)
 		{
 			if (!odom_is_received(now_time))
 			{
@@ -87,6 +90,7 @@ void PX4CtrlFSM::process()
 			}
 			if (odom_data.v.norm() > 0.1)
 			{
+				//不允许非静态起飞
 				ROS_ERROR("[px4ctrl] Reject AUTO_TAKEOFF. Odom_Vel=%fm/s, non-static takeoff is not allowed!", odom_data.v.norm());
 				break;
 			}
@@ -299,7 +303,7 @@ void PX4CtrlFSM::process()
 		break;
 	}
 
-	// STEP2: estimate thrust model
+	// STEP2: estimate thrust model 推力模型估计
 	if (state == AUTO_HOVER || state == CMD_CTRL)
 	{
 		// controller.estimateThrustModel(imu_data.a, bat_data.volt, param);
@@ -307,7 +311,7 @@ void PX4CtrlFSM::process()
 
 	}
 
-	// STEP3: solve and update new control commands
+	// STEP3: solve and update new control commands 求解和更新控制指令
 	if (rotor_low_speed_during_land) // used at the start of auto takeoff
 	{
 		motors_idling(imu_data, u);
@@ -341,29 +345,31 @@ void PX4CtrlFSM::process()
 	takeoff_land_data.triggered = false;
 }
 
+//电机怠速控制逻辑，仅提供维持电机转动的最小推力，不会上升
 void PX4CtrlFSM::motors_idling(const Imu_Data_t &imu, Controller_Output_t &u)
 {
 	u.q = imu.q;
 	u.bodyrates = Eigen::Vector3d::Zero();
-	u.thrust = 0.04;
+	u.thrust = 0.04;  //很小的推力
 }
 
+//着陆检测逻辑，检测无人机是否已经成功着陆
 void PX4CtrlFSM::land_detector(const State_t state, const Desired_State_t &des, const Odom_Data_t &odom)
 {
 	static State_t last_state = State_t::MANUAL_CTRL;
 	if (last_state == State_t::MANUAL_CTRL && (state == State_t::AUTO_HOVER || state == State_t::AUTO_TAKEOFF))
 	{
-		takeoff_land.landed = false; // Always holds
+		takeoff_land.landed = false; // Always holds 从手动切换到自动模式，标记为未着陆
 	}
 	last_state = state;
 
 	if (state == State_t::MANUAL_CTRL && !state_data.current_state.armed)
 	{
 		takeoff_land.landed = true;
-		return; // No need of other decisions
+		return; // No need of other decisions 手动模式且电机未解锁，直接判定为着陆
 	}
 
-	// land_detector parameters
+	// land_detector parameters 着陆检测条件
 	constexpr double POSITION_DEVIATION_C = -0.5; // Constraint 1: target position below real position for POSITION_DEVIATION_C meters.
 	constexpr double VELOCITY_THR_C = 0.1;		  // Constraint 2: velocity below VELOCITY_MIN_C m/s.
 	constexpr double TIME_KEEP_C = 3.0;			  // Constraint 3: Time(s) the Constraint 1&2 need to keep.
@@ -394,6 +400,7 @@ void PX4CtrlFSM::land_detector(const State_t state, const Desired_State_t &des, 
 	}
 }
 
+//生成悬停状态的期望指令
 Desired_State_t PX4CtrlFSM::get_hover_des()
 {
 	Desired_State_t des;
@@ -406,7 +413,7 @@ Desired_State_t PX4CtrlFSM::get_hover_des()
 
 	return des;
 }
-
+//从命令数据中生成期望状态指令
 Desired_State_t PX4CtrlFSM::get_cmd_des()
 {
 	Desired_State_t des;
